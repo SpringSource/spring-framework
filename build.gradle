@@ -45,13 +45,13 @@ configure(allprojects) { project ->
 	]
 
 	compileJava {
-		sourceCompatibility=1.6
-		targetCompatibility=1.6
+		sourceCompatibility=1.7
+		targetCompatibility=1.7
 	}
 
 	compileTestJava {
-		sourceCompatibility=1.8
-		targetCompatibility=1.8
+		sourceCompatibility=1.7
+		targetCompatibility=1.7
 		compileTestJava.options.compilerArgs += "-parameters"
 	}
 
@@ -263,6 +263,29 @@ project("spring-beans") {
 	}
 }
 
+project('spring-lang-groovy') {
+    apply plugin: 'groovy'
+    description 'Spring BeanBuilder'
+    dependencies {
+        compile project(':spring-beans')
+        compile project(':spring-context')
+        compile "org.codehaus.groovy:groovy-all:1.8.9"
+        testCompile project(':spring-test')
+    }
+    compileJava.enabled=false
+	compileGroovy {
+        sourceCompatibility=1.7
+        targetCompatibility=1.7
+	}
+    sourceSets {
+        main {
+            groovy {
+                srcDir 'src/main/java'
+            }
+        }
+    }
+}
+
 project("spring-aop") {
 	description = "Spring AOP"
 
@@ -407,8 +430,8 @@ project("spring-oxm") {
     compileTestJava {
 		// necessary to avoid java.lang.VerifyError on jibx compilation
 		// see http://jira.codehaus.org/browse/JIBX-465
-		sourceCompatibility=1.6
-		targetCompatibility=1.6
+		sourceCompatibility=1.7
+		targetCompatibility=1.7
 	}
 
 	dependencies {
