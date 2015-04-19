@@ -139,8 +139,9 @@ public class SendToMethodReturnValueHandler implements HandlerMethodReturnValueH
 		}
 		MessageHeaders headers = message.getHeaders();
 		String sessionId = SimpMessageHeaderAccessor.getSessionId(headers);
-
 		SendToUser sendToUser = returnType.getMethodAnnotation(SendToUser.class);
+    SimpMessageHeaderAccessor accessor = SimpMessageHeaderAccessor.wrap(message);
+    
 		if (sendToUser != null) {
 			boolean broadcast = sendToUser.broadcast();
 			String user = getUserName(message, headers);
@@ -154,10 +155,10 @@ public class SendToMethodReturnValueHandler implements HandlerMethodReturnValueH
 			String[] destinations = getTargetDestinations(sendToUser, message, this.defaultUserDestinationPrefix);
 			for (String destination : destinations) {
 				if (broadcast) {
-					this.messagingTemplate.convertAndSendToUser(user, destination, returnValue);
+					this.messagingTemplate.convertAndSendToUser(user, destination, returnValue, createHeaders(null, accessor, sendToUser.copyHeaders()));
 				}
 				else {
-					this.messagingTemplate.convertAndSendToUser(user, destination, returnValue, createHeaders(sessionId));
+					this.messagingTemplate.convertAndSendToUser(user, destination, returnValue, createHeaders(sessionId, accessor, sendToUser.copyHeaders()));
 				}
 			}
 		}
@@ -165,7 +166,7 @@ public class SendToMethodReturnValueHandler implements HandlerMethodReturnValueH
 			SendTo sendTo = returnType.getMethodAnnotation(SendTo.class);
 			String[] destinations = getTargetDestinations(sendTo, message, this.defaultDestinationPrefix);
 			for (String destination : destinations) {
-				this.messagingTemplate.convertAndSend(destination, returnValue, createHeaders(sessionId));
+				this.messagingTemplate.convertAndSend(destination, returnValue, createHeaders(sessionId, null, null));
 			}
 		}
 	}
@@ -194,13 +195,21 @@ public class SendToMethodReturnValueHandler implements HandlerMethodReturnValueH
 				new String[] {defaultPrefix + destination} : new String[] {defaultPrefix + "/" + destination});
 	}
 
-	private MessageHeaders createHeaders(String sessionId) {
+	private MessageHeaders createHeaders(String sessionId, SimpMessageHeaderAccessor inputHeaderAccessor, String[] headersToCopy) {
 		SimpMessageHeaderAccessor headerAccessor = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
 		if (getHeaderInitializer() != null) {
 			getHeaderInitializer().initHeaders(headerAccessor);
 		}
-		headerAccessor.setSessionId(sessionId);
+    if (sessionId != null)
+      headerAccessor.setSessionId(sessionId);
 		headerAccessor.setLeaveMutable(true);
+
+    if (inputHeaderAccessor != null)
+      for (String h : headersToCopy) {
+        String v = inputHeaderAccessor.getFirstNativeHeader(h);
+        if (v != null)
+          headerAccessor.addNativeHeader(h, v);
+      }
 		return headerAccessor.getMessageHeaders();
 	}
 
