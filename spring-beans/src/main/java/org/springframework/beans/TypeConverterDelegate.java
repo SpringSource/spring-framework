@@ -20,7 +20,9 @@ import java.beans.PropertyEditor;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
@@ -72,6 +74,14 @@ class TypeConverterDelegate {
 
 	private final Object targetObject;
 
+	private final Class<?>[] numberSubclasses = new Class<?>[] {
+		java.lang.Byte.class, 
+		java.lang.Double.class, 
+		java.lang.Float.class, 
+		java.lang.Integer.class, 
+		java.lang.Long.class, 
+		java.lang.Short.class
+	};
 
 	/**
 	 * Create a new TypeConverterDelegate for the given editor registry.
@@ -171,6 +181,31 @@ class TypeConverterDelegate {
 		if (editor == null && conversionService != null && convertedValue != null && typeDescriptor != null) {
 			TypeDescriptor sourceTypeDesc = TypeDescriptor.forObject(newValue);
 			TypeDescriptor targetTypeDesc = typeDescriptor;
+
+			if (java.lang.String.class.equals(sourceTypeDesc.getType())){
+				// if the source is a String, it may be parseable as a Number 
+				// and there may be a converter for that.
+				for (@SuppressWarnings("rawtypes") Class _class : numberSubclasses) {
+					try {
+						Number number = null;
+						if (conversionService.canConvert(_class, targetTypeDesc.getType())) {
+							number = NumberUtils.parseNumber((String)convertedValue, _class);
+							convertedValue = number;
+
+							try {
+								return (T) conversionService.convert(convertedValue, TypeDescriptor.forObject(number), targetTypeDesc);
+							}
+							catch (ConversionFailedException ex) {
+								// fallback to default conversion logic below
+								firstAttemptEx = ex;
+							}
+						}
+					} catch (NumberFormatException e) {
+						// unable to convert.  try another type.
+					}
+				}
+			}
+
 			if (conversionService.canConvert(sourceTypeDesc, targetTypeDesc)) {
 				try {
 					return (T) conversionService.convert(convertedValue, sourceTypeDesc, targetTypeDesc);
