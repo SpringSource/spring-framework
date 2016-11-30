@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.Charset;
 
@@ -105,9 +104,15 @@ public abstract class StreamUtils {
 		Assert.notNull(in, "No input String specified");
 		Assert.notNull(charset, "No charset specified");
 		Assert.notNull(out, "No OutputStream specified");
-		Writer writer = new OutputStreamWriter(out, charset);
-		writer.write(in);
-		writer.flush();
+		//we use FastOutputStreamWriter to save memory and improve tps
+		Writer writer = new FastOutputStreamWriter(out, charset);
+		try {
+			writer.write(in);
+			writer.flush();
+		}
+		finally {
+			writer.close();
+		}                     
 	}
 
 	/**
