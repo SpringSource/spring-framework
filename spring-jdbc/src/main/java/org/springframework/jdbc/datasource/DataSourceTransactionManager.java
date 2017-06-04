@@ -242,6 +242,9 @@ public class DataSourceTransactionManager extends AbstractPlatformTransactionMan
 		Connection con = null;
 
 		try {
+		TransactionSynchronizationManager.setCurrentTransactionIsolationLevel(
+					definition.getIsolationLevel() != TransactionDefinition.ISOLATION_DEFAULT ?
+							definition.getIsolationLevel() : null);
 			if (txObject.getConnectionHolder() == null ||
 					txObject.getConnectionHolder().isSynchronizedWithTransaction()) {
 				Connection newCon = this.dataSource.getConnection();
