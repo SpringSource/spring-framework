@@ -99,7 +99,8 @@ public class TilesView extends AbstractUrlBasedView {
 		this.applicationContext = ServletUtil.getApplicationContext(servletContext);
 
 		if (this.renderer == null) {
-			TilesContainer container = TilesAccess.getContainer(this.applicationContext);
+			TilesContainer container = TilesAccess.getContainer(this.applicationContext,
+					getWebApplicationContext().getId());
 			this.renderer = new DefinitionRenderer(container);
 		}
 	}
@@ -134,6 +135,7 @@ public class TilesView extends AbstractUrlBasedView {
 		}
 
 		Request tilesRequest = createTilesRequest(request, response);
+        TilesAccess.setCurrentContainer(tilesRequest, getWebApplicationContext().getId());
 		this.renderer.render(getUrl(), tilesRequest);
 	}
 
