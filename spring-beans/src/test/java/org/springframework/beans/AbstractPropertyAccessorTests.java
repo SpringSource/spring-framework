@@ -57,6 +57,7 @@ import org.springframework.tests.sample.beans.ITestBean;
 import org.springframework.tests.sample.beans.IndexedTestBean;
 import org.springframework.tests.sample.beans.NumberTestBean;
 import org.springframework.tests.sample.beans.TestBean;
+import org.springframework.tests.sample.beans.TestBeans;
 import org.springframework.util.StopWatch;
 import org.springframework.util.StringUtils;
 
@@ -160,12 +161,14 @@ public abstract class AbstractPropertyAccessorTests {
 		assertTrue(accessor.isReadableProperty("list"));
 		assertTrue(accessor.isReadableProperty("set"));
 		assertTrue(accessor.isReadableProperty("map"));
+		assertTrue(accessor.isReadableProperty("myIterableType"));
 		assertFalse(accessor.isReadableProperty("xxx"));
 
 		assertTrue(accessor.isWritableProperty("array"));
 		assertTrue(accessor.isWritableProperty("list"));
 		assertTrue(accessor.isWritableProperty("set"));
 		assertTrue(accessor.isWritableProperty("map"));
+		assertTrue(accessor.isWritableProperty("myIterableType"));
 		assertFalse(accessor.isWritableProperty("xxx"));
 
 		assertTrue(accessor.isReadableProperty("array[0]"));
@@ -180,6 +183,7 @@ public abstract class AbstractPropertyAccessorTests {
 		assertTrue(accessor.isReadableProperty("map[key4][0].name"));
 		assertTrue(accessor.isReadableProperty("map[key4][1]"));
 		assertTrue(accessor.isReadableProperty("map[key4][1].name"));
+		assertTrue(accessor.isReadableProperty("myIterableType[0].name"));
 		assertFalse(accessor.isReadableProperty("array[key1]"));
 
 		assertTrue(accessor.isWritableProperty("array[0]"));
@@ -194,6 +198,7 @@ public abstract class AbstractPropertyAccessorTests {
 		assertTrue(accessor.isWritableProperty("map[key4][0].name"));
 		assertTrue(accessor.isWritableProperty("map[key4][1]"));
 		assertTrue(accessor.isWritableProperty("map[key4][1].name"));
+		assertTrue(accessor.isReadableProperty("myIterableType[0].name"));
 		assertFalse(accessor.isWritableProperty("array[key1]"));
 	}
 
@@ -1619,6 +1624,7 @@ public abstract class AbstractPropertyAccessorTests {
 		assertEquals("name5", accessor.getPropertyValue("map[\"key.3\"].name"));
 		assertEquals("nameX", accessor.getPropertyValue("map[key4][0].name"));
 		assertEquals("nameY", accessor.getPropertyValue("map[key4][1].name"));
+		assertEquals("nameZ", accessor.getPropertyValue("myIterableType[0].name"));
 
 		MutablePropertyValues pvs = new MutablePropertyValues();
 		pvs.add("array[0].name", "name5");
@@ -1631,6 +1637,7 @@ public abstract class AbstractPropertyAccessorTests {
 		pvs.add("map['key.3'].name", "name0");
 		pvs.add("map[key4][0].name", "nameA");
 		pvs.add("map[key4][1].name", "nameB");
+		pvs.add("myIterableType[0].name", "nameAZ");
 		accessor.setPropertyValues(pvs);
 		assertEquals("name5", tb0.getName());
 		assertEquals("name4", tb1.getName());
@@ -1648,6 +1655,7 @@ public abstract class AbstractPropertyAccessorTests {
 		assertEquals("name0", accessor.getPropertyValue("map['key.3'].name"));
 		assertEquals("nameA", accessor.getPropertyValue("map[key4][0].name"));
 		assertEquals("nameB", accessor.getPropertyValue("map[key4][1].name"));
+		assertEquals("nameAZ", accessor.getPropertyValue("myIterableType[0].name"));
 	}
 
 	@Test
@@ -1662,6 +1670,7 @@ public abstract class AbstractPropertyAccessorTests {
 		TestBean tb7 = ((TestBean) target.getSet().toArray()[1]);
 		TestBean tb4 = ((TestBean) target.getMap().get("key1"));
 		TestBean tb5 = ((TestBean) target.getMap().get("key2"));
+		TestBean tbZ = ((TestBean) target.getMyIterableType().iterator().next());
 		assertEquals(tb0, accessor.getPropertyValue("array[0]"));
 		assertEquals(tb1, accessor.getPropertyValue("array[1]"));
 		assertEquals(tb2, accessor.getPropertyValue("list[0]"));
@@ -1672,6 +1681,8 @@ public abstract class AbstractPropertyAccessorTests {
 		assertEquals(tb5, accessor.getPropertyValue("map[key2]"));
 		assertEquals(tb4, accessor.getPropertyValue("map['key1']"));
 		assertEquals(tb5, accessor.getPropertyValue("map[\"key2\"]"));
+		assertEquals(tb5, accessor.getPropertyValue("map[\"key2\"]"));
+		assertEquals(tbZ, accessor.getPropertyValue("myIterableType[0]"));
 
 		MutablePropertyValues pvs = new MutablePropertyValues();
 		pvs.add("array[0]", tb5);
