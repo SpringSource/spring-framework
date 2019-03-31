@@ -827,6 +827,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 
 		oldBeanDefinition = this.beanDefinitionMap.get(beanName);
 		if (oldBeanDefinition != null) {
+			boolean skipBeanDefinitionOverride = false;
 			if (!isAllowBeanDefinitionOverriding()) {
 				throw new BeanDefinitionStoreException(beanDefinition.getResourceDescription(), beanName,
 						"Cannot register bean definition [" + beanDefinition + "] for bean '" + beanName +
@@ -839,8 +840,14 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 							"' with a framework-generated bean definition: replacing [" +
 							oldBeanDefinition + "] with [" + beanDefinition + "]");
 				}
-			}
-			else if (!beanDefinition.equals(oldBeanDefinition)) {
+			} else if (isOverridingPrimaryBean(oldBeanDefinition, beanDefinition)) {
+				skipBeanDefinitionOverride = true;
+				if (this.logger.isDebugEnabled()) {
+					this.logger.debug("Skipping bean definition override of '" + beanName +
+							"', because existing bean definition [" + oldBeanDefinition +
+							"] is primary and new definition [" + beanDefinition + "] is not.");
+				}
+			} else if (!beanDefinition.equals(oldBeanDefinition)) {
 				if (this.logger.isInfoEnabled()) {
 					this.logger.info("Overriding bean definition for bean '" + beanName +
 							"' with a different definition: replacing [" + oldBeanDefinition +
@@ -854,7 +861,9 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 							"] with [" + beanDefinition + "]");
 				}
 			}
-			this.beanDefinitionMap.put(beanName, beanDefinition);
+			if (!skipBeanDefinitionOverride) {
+				this.beanDefinitionMap.put(beanName, beanDefinition);
+			}
 		}
 		else {
 			if (hasBeanCreationStarted()) {
@@ -884,6 +893,10 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		if (oldBeanDefinition != null || containsSingleton(beanName)) {
 			resetBeanDefinition(beanName);
 		}
+	}
+
+	private boolean isOverridingPrimaryBean(BeanDefinition oldBeanDefinition, BeanDefinition newBeanDefinition) {
+		return oldBeanDefinition.isPrimary() && !newBeanDefinition.isPrimary();
 	}
 
 	@Override
