@@ -35,6 +35,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.reactive.ClientHttpConnector;
+import org.springframework.http.client.reactive.JdkClientHttpConnector;
 import org.springframework.http.client.reactive.JettyClientHttpConnector;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.http.codec.ServerSentEvent;
@@ -75,12 +76,16 @@ class SseIntegrationTests extends AbstractHttpHandlerIntegrationTests {
 		return new Object[][] {
 			{new JettyHttpServer(), new ReactorClientHttpConnector()},
 			{new JettyHttpServer(), new JettyClientHttpConnector()},
+			{new JettyHttpServer(), new JdkClientHttpConnector()},
 			{new ReactorHttpServer(), new ReactorClientHttpConnector()},
 			{new ReactorHttpServer(), new JettyClientHttpConnector()},
+			{new ReactorHttpServer(), new JdkClientHttpConnector()},
 			{new TomcatHttpServer(base.getAbsolutePath()), new ReactorClientHttpConnector()},
 			{new TomcatHttpServer(base.getAbsolutePath()), new JettyClientHttpConnector()},
+			{new TomcatHttpServer(base.getAbsolutePath()), new JdkClientHttpConnector()},
 			{new UndertowHttpServer(), new ReactorClientHttpConnector()},
-			{new UndertowHttpServer(), new JettyClientHttpConnector()}
+			{new UndertowHttpServer(), new JettyClientHttpConnector()},
+			{new UndertowHttpServer(), new JdkClientHttpConnector()}
 		};
 	}
 
