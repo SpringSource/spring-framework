@@ -18,6 +18,7 @@ package org.springframework.core.convert.support;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -28,6 +29,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import java.util.function.BiConsumer;
+import java.util.function.BinaryOperator;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 import org.springframework.core.DecoratingProxy;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.convert.ConversionException;
@@ -164,6 +171,41 @@ public class GenericConversionService implements ConfigurableConversionService {
 		}
 		GenericConverter converter = getConverter(sourceType, targetType);
 		return (converter == NO_OP_CONVERTER);
+	}
+
+	@Nullable
+	public <S, T> List<T> convertList(@Nullable List<S> sourceList, Class<T> targetClass) {
+		return convertCollection(sourceList, targetClass, ArrayList::new);
+	}
+
+	@Nullable
+	public <S, T> List<T> convertList(@Nullable List<S> sourceList, TypeDescriptor targetType) {
+		return convertCollection(sourceList, targetType, ArrayList::new);
+	}
+
+	@Nullable
+	public <S, T, C extends Collection<T>> C convertCollection(
+		@Nullable Collection<S> sourceCollection, Class<T> targetClass, Supplier<C> supplier) {
+
+		if (sourceCollection == null) {
+			return null;
+		}
+
+		if (sourceCollection.isEmpty()) {
+			return supplier.get();
+		}
+
+		return sourceCollection.stream()
+				.map(source -> convert(source, targetClass))
+				.collect(Collectors.toCollection(supplier));
+	}
+
+	@SuppressWarnings("unchecked")
+	@Nullable
+	public <S, T, C extends Collection<T>> C convertCollection(
+		@Nullable Collection<S> sourceCollection, TypeDescriptor targetType, Supplier<C> supplier) {
+
+		return convertCollection(sourceCollection, (Class<T>) targetType.getType(), supplier);
 	}
 
 	@Override
