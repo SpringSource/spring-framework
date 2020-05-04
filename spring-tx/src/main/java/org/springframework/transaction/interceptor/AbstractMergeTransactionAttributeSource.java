@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,19 +27,34 @@ import org.apache.commons.logging.LogFactory;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.core.MethodClassKey;
 import org.springframework.lang.Nullable;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.util.ClassUtils;
 
 /**
  * Abstract implementation of {@link TransactionAttributeSource} that caches
- * attributes for methods and implements a fallback policy: 1. specific target
- * method; 2. target class; 3. declaring method; 4. declaring class/interface.
+ * attributes for methods and implements a merge policy for transaction attributes
+ * (see {@link Transactional} annotation) with following priorities (high to low):
+ * <ol>
+ * <li>specific method;
+ * <li>declaring class of the specific method;
+ * <li>target class;
+ * <li>method in the declaring class/interface;
+ * <li>declaring class/interface.
+ * </ol>
  *
- * <p>Defaults to using the target class's transaction attribute if none is
- * associated with the target method. Any transaction attribute associated with
- * the target method completely overrides a class transaction attribute.
- * If none found on the target class, the interface that the invoked method
- * has been called through (in case of a JDK proxy) will be checked.
+ * <p>The merge policy means that all transaction attributes which are not
+ * explicitly set [1] on a specific definition place (see above) will be inherited
+ * from the place with the next lower priority.
  *
+ * <p>On the contrary, the previous default {@link AbstractFallbackTransactionAttributeSource} implemented a fallback policy,
+ * where all attributes were read from the first found definition place (essentially in the above order), and all others were ignored.
+ *
+ * <p>See analysis in <a href="https://github.com/spring-projects/spring-framework/issues/24291">Inherited @Transactional methods use wrong TransactionManager</a>.
+ *
+ * <p>[1] If the value of an attribute is equal to its default value, the current implementation
+ * cannot distinguish, whether this value has been set explicitly or implicitly,
+ * and considers such attribute as "not explicitly set". Therefore it's currently impossible to override a non-default value with a default value.
+
  * <p>This implementation caches attributes by method after they are first used.
  * If it is ever desirable to allow dynamic changing of transaction attributes
  * (which is very unlikely), caching could be made configurable. Caching is
@@ -49,7 +64,7 @@ import org.springframework.util.ClassUtils;
  * @author Juergen Hoeller
  * @since 1.1
  */
-public abstract class AbstractFallbackTransactionAttributeSource implements TransactionAttributeSource {
+public abstract class AbstractMergeTransactionAttributeSource implements TransactionAttributeSource {
 
 	/**
 	 * Canonical value held in cache to indicate no transaction attribute was
@@ -154,38 +169,92 @@ public abstract class AbstractFallbackTransactionAttributeSource implements Tran
 			return null;
 		}
 
-		// The method may be on an interface, but we need attributes from the target class.
+		// The method may be on an interface, but we also need attributes from the target class.
 		// If the target class is null, the method will be unchanged.
 		Method specificMethod = AopUtils.getMostSpecificMethod(method, targetClass);
 
-		// First try is the method in the target class.
+		// 1st priority is the specific method.
 		TransactionAttribute txAttr = findTransactionAttribute(specificMethod);
-		if (txAttr != null) {
-			return txAttr;
+
+		// 2nd priority is the declaring class of the specific method.
+		Class<?> declaringClass = specificMethod.getDeclaringClass();
+		boolean userLevelMethod = ClassUtils.isUserLevelMethod(method);
+		if (userLevelMethod) {
+			txAttr = merge(txAttr, findTransactionAttribute(declaringClass));
 		}
 
-		// Second try is the transaction attribute on the target class.
-		txAttr = findTransactionAttribute(specificMethod.getDeclaringClass());
-		if (txAttr != null && ClassUtils.isUserLevelMethod(method)) {
-			return txAttr;
+		// 3rd priority is the target class
+		if (targetClass != null && !targetClass.equals(declaringClass) && userLevelMethod) {
+			txAttr = merge(txAttr, findTransactionAttribute(targetClass));
 		}
 
-		if (specificMethod != method) {
-			// Fallback is to look at the original method.
-			txAttr = findTransactionAttribute(method);
-			if (txAttr != null) {
-				return txAttr;
-			}
-			// Last fallback is the class of the original method.
-			txAttr = findTransactionAttribute(method.getDeclaringClass());
-			if (txAttr != null && ClassUtils.isUserLevelMethod(method)) {
-				return txAttr;
-			}
+		if (method != specificMethod) {
+			// 4th priority is the method in the declaring class/interface.
+			txAttr = merge(txAttr, findTransactionAttribute(method));
+
+			// 5th priority is the declaring class/interface.
+			txAttr = merge(txAttr, findTransactionAttribute(method.getDeclaringClass()));
 		}
 
-		return null;
+		return txAttr;
 	}
 
+	/**
+	 * Set empty and default properties of "primary" object from "secondary" object.
+	 * <p>Parameter objects should not be used after the call to this method,
+	 * as they can be changed here or/and returned as a result.
+	 */
+	@Nullable
+	private TransactionAttribute merge(@Nullable TransactionAttribute primaryObj, @Nullable TransactionAttribute secondaryObj) {
+		if (primaryObj == null) {
+			return secondaryObj;
+		}
+		if (secondaryObj == null) {
+			return primaryObj;
+		}
+
+		if (primaryObj instanceof DefaultTransactionAttribute && secondaryObj instanceof DefaultTransactionAttribute) {
+			DefaultTransactionAttribute primary = (DefaultTransactionAttribute) primaryObj;
+			DefaultTransactionAttribute secondary = (DefaultTransactionAttribute) secondaryObj;
+
+			if (primary.getQualifier() == null || primary.getQualifier().isEmpty()) {
+				primary.setQualifier(secondary.getQualifier());
+			}
+			if (primary.getDescriptor() == null || primary.getDescriptor().isEmpty()) {
+				primary.setDescriptor(secondary.getDescriptor());
+			}
+			if (primary.getName() == null || primary.getName().isEmpty()) {
+				primary.setName(secondary.getName());
+			}
+
+			// The following properties have default values in DefaultTransactionDefinition;
+			// we cannot distinguish here, whether these values have been set explicitly or implicitly;
+			// but it seems to be logical to handle default values like empty values.
+			if (primary.getPropagationBehavior() == TransactionDefinition.PROPAGATION_REQUIRED) {
+				primary.setPropagationBehavior(secondary.getPropagationBehavior());
+			}
+			if (primary.getIsolationLevel() == TransactionDefinition.ISOLATION_DEFAULT) {
+				primary.setIsolationLevel(secondary.getIsolationLevel());
+			}
+			if (primary.getTimeout() == TransactionDefinition.TIMEOUT_DEFAULT) {
+				primary.setTimeout(secondary.getTimeout());
+			}
+			if (!primary.isReadOnly()) {
+				primary.setReadOnly(secondary.isReadOnly());
+			}
+		}
+
+		if (primaryObj instanceof RuleBasedTransactionAttribute && secondaryObj instanceof RuleBasedTransactionAttribute) {
+			RuleBasedTransactionAttribute primary = (RuleBasedTransactionAttribute) primaryObj;
+			RuleBasedTransactionAttribute secondary = (RuleBasedTransactionAttribute) secondaryObj;
+
+			if (primary.getRollbackRules() == null || primary.getRollbackRules().isEmpty()) {
+				primary.setRollbackRules(secondary.getRollbackRules());
+			}
+		}
+
+		return primaryObj;
+	}
 
 	/**
 	 * Subclasses need to implement this to return the transaction attribute for the
