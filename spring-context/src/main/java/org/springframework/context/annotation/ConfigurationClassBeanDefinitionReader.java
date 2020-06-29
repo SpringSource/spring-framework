@@ -68,6 +68,7 @@ import org.springframework.util.StringUtils;
  * @author Juergen Hoeller
  * @author Phillip Webb
  * @author Sam Brannen
+ * @author Vladislav Kisel
  * @since 3.0
  * @see ConfigurationClassParser
  */
@@ -161,12 +162,20 @@ class ConfigurationClassBeanDefinitionReader {
 		AnnotationConfigUtils.processCommonDefinitionAnnotations(configBeanDef, metadata);
 
 		BeanDefinitionHolder definitionHolder = new BeanDefinitionHolder(configBeanDef, configBeanName);
-		definitionHolder = AnnotationConfigUtils.applyScopedProxyMode(scopeMetadata, definitionHolder, this.registry);
-		this.registry.registerBeanDefinition(definitionHolder.getBeanName(), definitionHolder.getBeanDefinition());
-		configClass.setBeanName(configBeanName);
 
-		if (logger.isTraceEnabled()) {
-			logger.trace("Registered bean definition for imported class '" + configBeanName + "'");
+		// Check whether this configuration was already registered during package scanning. If yes, this would mean that the scanned config
+		// was overridden by an imported one. It will have no bean name set at this point.
+		String scannedBeanName = AnnotationBeanNameGenerator.INSTANCE.buildDefaultBeanName(definitionHolder.getBeanDefinition());
+		if (this.registry.containsBeanDefinition(scannedBeanName)) {
+			configClass.setBeanName(scannedBeanName);
+		} else {
+			definitionHolder = AnnotationConfigUtils.applyScopedProxyMode(scopeMetadata, definitionHolder, this.registry);
+			this.registry.registerBeanDefinition(definitionHolder.getBeanName(), definitionHolder.getBeanDefinition());
+			configClass.setBeanName(configBeanName);
+
+			if (logger.isTraceEnabled()) {
+				logger.trace("Registered bean definition for imported class '" + configBeanName + "'");
+			}
 		}
 	}
 
