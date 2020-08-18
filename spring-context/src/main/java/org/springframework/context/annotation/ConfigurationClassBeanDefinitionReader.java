@@ -442,8 +442,8 @@ class ConfigurationClassBeanDefinitionReader {
 		}
 
 		@Override
-		public boolean isFactoryMethod(Method candidate) {
-			return (super.isFactoryMethod(candidate) && BeanAnnotationHelper.isBeanAnnotated(candidate));
+		public boolean isFactoryMethod(Method candidate,String beanName) {
+			return (super.isFactoryMethod(candidate,beanName) && BeanAnnotationHelper.isBeanAnnotated(candidate) && (beanName == null ? true :BeanAnnotationHelper.determineBeanNameFor(candidate).equals(beanName)));
 		}
 
 		@Override
