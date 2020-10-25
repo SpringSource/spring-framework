@@ -383,6 +383,11 @@ public class AdvisedSupport extends ProxyConfig implements Advised {
 		return this.advisors;
 	}
 
+	protected void clearAdvisors() {
+		this.advisors.clear();
+		updateAdvisorArray();
+		adviceChanged();
+	}
 
 	@Override
 	public void addAdvice(Advice advice) throws AopConfigException {
