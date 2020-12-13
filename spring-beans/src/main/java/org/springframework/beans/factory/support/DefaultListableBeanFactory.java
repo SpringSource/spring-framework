@@ -886,6 +886,8 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		else {
 			// Still in startup registration phase
 			this.beanDefinitionNames.remove(beanName);
+			// Remove register alias
+			this.removeAliasByName(beanName);
 		}
 		this.frozenBeanDefinitionNames = null;
 
