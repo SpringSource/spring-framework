@@ -535,7 +535,7 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 
 		// Content phase
 		ServletServerHttpResponse outputMessage = new ServletServerHttpResponse(response);
-		if (request.getHeader(HttpHeaders.RANGE) == null) {
+		if (request.getHeader(HttpHeaders.RANGE) == null || resource.contentLength() == null) {
 			Assert.state(this.resourceHttpMessageConverter != null, "Not initialized");
 			this.resourceHttpMessageConverter.write(resource, mediaType, outputMessage);
 		}
@@ -759,12 +759,14 @@ public class ResourceHttpRequestHandler extends WebContentGenerator
 	protected void setHeaders(HttpServletResponse response, Resource resource, @Nullable MediaType mediaType)
 			throws IOException {
 
-		long length = resource.contentLength();
-		if (length > Integer.MAX_VALUE) {
-			response.setContentLengthLong(length);
-		}
-		else {
-			response.setContentLength((int) length);
+		Long length = resource.contentLength();
+		if (length != null) {
+			if (length > Integer.MAX_VALUE) {
+				response.setContentLengthLong(length);
+			}
+			else {
+				response.setContentLength((int) length);
+			}
 		}
 
 		if (mediaType != null) {
