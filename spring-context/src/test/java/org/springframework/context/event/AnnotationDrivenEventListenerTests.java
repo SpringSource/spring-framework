@@ -61,6 +61,7 @@ import org.springframework.context.event.test.GenericEventPojo;
 import org.springframework.context.event.test.Identifiable;
 import org.springframework.context.event.test.TestEvent;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
+import org.springframework.core.ResolvableType;
 import org.springframework.core.annotation.AliasFor;
 import org.springframework.core.annotation.Order;
 import org.springframework.scheduling.annotation.Async;
@@ -605,6 +606,17 @@ public class AnnotationDrivenEventListenerTests {
 		this.eventCollector.assertNoEventReceived(listener);
 		this.eventCollector.assertTotalEventsCount(0);
 	}
+	@Test
+	public void publishEventWithGeneric() throws NoSuchMethodException {
+		MyAnnotationConfigApplicationContext ctx = new MyAnnotationConfigApplicationContext();
+		context = ctx;
+		ctx.register(MyEventWithGenericListener.class);
+		ctx.refresh();
+		ResolvableType resolvableType = ResolvableType.forMethodParameter(MyEventWithGenericListener.class.getMethod("onMyEventWithGeneric",MyEventWithGeneric.class),0);
+		ctx.publishEvent(new MyEventWithGeneric<String>(),resolvableType);
+		assertThat(MyEventWithGenericListener.count).isEqualTo(1);
+	}
+
 
 	@Test
 	public void orderedListeners() {
@@ -1115,6 +1127,31 @@ public class AnnotationDrivenEventListenerTests {
 				throw new AssertionError();
 			}
 		}
+	}
+
+	public static class MyAnnotationConfigApplicationContext extends AnnotationConfigApplicationContext{
+
+		@Override
+		public void publishEvent(Object event, ResolvableType eventType) {
+			super.publishEvent(event, eventType);
+		}
+	}
+
+	public static class MyEventWithGeneric<T> {
+
+	}
+
+	@Component
+	public static class MyEventWithGenericListener{
+
+		public static int count ;
+
+		@EventListener
+		public void onMyEventWithGeneric(MyEventWithGeneric<String> event){
+			count ++;
+		}
+
+
 	}
 
 }
