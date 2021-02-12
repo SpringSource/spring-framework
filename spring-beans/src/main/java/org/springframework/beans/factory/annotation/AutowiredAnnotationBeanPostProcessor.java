@@ -712,7 +712,7 @@ public class AutowiredAnnotationBeanPostProcessor implements SmartInstantiationA
 					descriptors[i] = currDesc;
 					try {
 						Object arg = beanFactory.resolveDependency(currDesc, beanName, autowiredBeans, typeConverter);
-						if (arg == null && !this.required) {
+						if (arg == null && !this.required && !methodParam.isOptional()) {
 							arguments = null;
 							break;
 						}

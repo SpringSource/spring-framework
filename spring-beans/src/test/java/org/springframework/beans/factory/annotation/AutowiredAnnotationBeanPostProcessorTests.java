@@ -33,6 +33,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -73,6 +74,7 @@ import org.springframework.core.ResolvableType;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.testfixture.io.SerializationTestUtils;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ReflectionUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -2134,6 +2136,26 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 		assertThat(bean.testBean).isSameAs(bf.getBean("annotatedBean"));
 	}
 
+	@Test
+	public void testMethodInjectionWithMultiMixedNullableArgs(){
+		bf.registerBeanDefinition("nonNullBean", new RootBeanDefinition(
+				NonNullBean.class));
+		bf.registerBeanDefinition("mixedNullableInjectionBean", new RootBeanDefinition(MixedNullableInjectionBean.class));
+		MixedNullableInjectionBean mixedNullableInjectionBean = bf.getBean(MixedNullableInjectionBean.class);
+		assertThat(mixedNullableInjectionBean.nonNullBean).isNotNull();
+		assertThat(mixedNullableInjectionBean.nullableBean).isNull();
+	}
+
+	@Test
+	public void testMethodInjectionWithMultiMixedOptionalArgs(){
+		bf.registerBeanDefinition("nonNullBean", new RootBeanDefinition(
+				NonNullBean.class));
+		bf.registerBeanDefinition("mixedOptionalInjectionBean", new RootBeanDefinition(MixedOptionalInjectionBean.class));
+		MixedOptionalInjectionBean mixedOptionalInjectionBean = bf.getBean(MixedOptionalInjectionBean.class);
+		assertThat(mixedOptionalInjectionBean.nonNullBean).isNotNull();
+		assertThat(mixedOptionalInjectionBean.nullableBean).isNull();
+	}
+
 	private <E extends UnsatisfiedDependencyException> Consumer<E> methodParameterDeclaredOn(
 			Class<?> expected) {
 		return declaredOn(
@@ -3825,6 +3847,37 @@ public class AutowiredAnnotationBeanPostProcessorTests {
 		@Order(0)
 		public static TestBean newTestBean2() {
 			return new TestBean();
+		}
+	}
+
+	static class NullableBean {
+
+	}
+	static class NonNullBean {
+
+	}
+
+	static class MixedNullableInjectionBean{
+		public NonNullBean nonNullBean;
+		public NullableBean nullableBean;
+
+		@Autowired(required = false)
+		public void nullabilityInjection(@Nullable NullableBean nullableBean, NonNullBean nonNullBean){
+			if(nullableBean != null){
+				this.nullableBean = nullableBean;
+			}
+			this.nonNullBean = nonNullBean;
+		}
+	}
+
+	static class MixedOptionalInjectionBean{
+		public NonNullBean nonNullBean;
+		public NullableBean nullableBean;
+
+		@Autowired(required = false)
+		public void optionalInjection(Optional<NullableBean> optionalBean, NonNullBean nonNullBean){
+			optionalBean.ifPresent(bean -> this.nullableBean = bean);
+			this.nonNullBean = nonNullBean;
 		}
 	}
 
