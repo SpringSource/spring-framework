@@ -364,11 +364,11 @@ public class AnnotationDrivenEventListenerTests {
 	}
 
 	@Test
-	public void eventListenerWorksWithCglibProxy() {
-		load(CglibProxyTestBean.class);
+	public void eventListenerWorksWithClassBasedProxy() {
+		load(ClassBasedProxyTestBean.class);
 
-		CglibProxyTestBean proxy = this.context.getBean(CglibProxyTestBean.class);
-		assertThat(AopUtils.isCglibProxy(proxy)).as("bean should be a cglib proxy").isTrue();
+		ClassBasedProxyTestBean proxy = this.context.getBean(ClassBasedProxyTestBean.class);
+		assertThat(AopUtils.isClassBasedProxy(proxy)).as("bean should be a class-based proxy").isTrue();
 		this.eventCollector.assertNoEventReceived(proxy.getId());
 
 		this.context.publishEvent(new ContextRefreshedEvent(this.context));
@@ -381,9 +381,9 @@ public class AnnotationDrivenEventListenerTests {
 	}
 
 	@Test
-	public void privateMethodOnCglibProxyFails() {
+	public void privateMethodOnClassBasedProxyFails() {
 		assertThatExceptionOfType(BeanInitializationException.class).isThrownBy(() ->
-				load(CglibProxyWithPrivateMethod.class))
+				load(ClassBasedProxyWithPrivateMethod.class))
 			.withCauseInstanceOf(IllegalStateException.class);
 	}
 
@@ -394,7 +394,7 @@ public class AnnotationDrivenEventListenerTests {
 		this.context.getBeanFactory().registerScope("custom", customScope);
 
 		CustomScopeTestBean proxy = this.context.getBean(CustomScopeTestBean.class);
-		assertThat(AopUtils.isCglibProxy(proxy)).as("bean should be a cglib proxy").isTrue();
+		assertThat(AopUtils.isClassBasedProxy(proxy)).as("bean should be a class-based proxy").isTrue();
 		this.eventCollector.assertNoEventReceived(proxy.getId());
 
 		this.context.publishEvent(new ContextRefreshedEvent(this.context));
@@ -929,7 +929,7 @@ public class AnnotationDrivenEventListenerTests {
 
 	@Component
 	@Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)
-	static class CglibProxyTestBean extends AbstractTestEventListener {
+	static class ClassBasedProxyTestBean extends AbstractTestEventListener {
 
 		@EventListener
 		public void handleIt(TestEvent event) {
@@ -940,7 +940,7 @@ public class AnnotationDrivenEventListenerTests {
 
 	@Component
 	@Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)
-	static class CglibProxyWithPrivateMethod extends AbstractTestEventListener {
+	static class ClassBasedProxyWithPrivateMethod extends AbstractTestEventListener {
 
 		@EventListener
 		private void handleIt(TestEvent event) {
