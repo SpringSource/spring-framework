@@ -76,6 +76,7 @@ import org.springframework.util.StringUtils;
  * @author Costin Leau
  * @author Sebastien Deleuze
  * @author Sam Brannen
+ * @author Andrey Golikov
  * @since 2.0
  * @see #autowireConstructor
  * @see #instantiateUsingFactoryMethod
@@ -191,6 +192,10 @@ class ConstructorResolver {
 			int minNrOfArgs;
 			if (explicitArgs != null) {
 				minNrOfArgs = explicitArgs.length;
+				resolvedValues = new ConstructorArgumentValues();
+				for (Object arg : explicitArgs) {
+					resolvedValues.addGenericArgumentValue(arg);
+				}
 			}
 			else {
 				ConstructorArgumentValues cargs = mbd.getConstructorArgumentValues();
@@ -217,7 +222,7 @@ class ConstructorResolver {
 
 				ArgumentsHolder argsHolder;
 				Class<?>[] paramTypes = candidate.getParameterTypes();
-				if (resolvedValues != null) {
+				if (explicitArgs == null || parameterCount > explicitArgs.length) {
 					try {
 						String[] paramNames = ConstructorPropertiesChecker.evaluate(candidate, parameterCount);
 						if (paramNames == null) {
