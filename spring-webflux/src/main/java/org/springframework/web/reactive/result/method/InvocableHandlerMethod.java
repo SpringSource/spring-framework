@@ -35,6 +35,7 @@ import org.springframework.core.ReactiveAdapter;
 import org.springframework.core.ReactiveAdapterRegistry;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.ReflectionUtils;
@@ -65,6 +66,8 @@ public class InvocableHandlerMethod extends HandlerMethod {
 	private ParameterNameDiscoverer parameterNameDiscoverer = new DefaultParameterNameDiscoverer();
 
 	private ReactiveAdapterRegistry reactiveAdapterRegistry = ReactiveAdapterRegistry.getSharedInstance();
+
+	private BlockingPredicate blockingPredicate = new BlockingPredicate();
 
 
 	/**
@@ -122,6 +125,13 @@ public class InvocableHandlerMethod extends HandlerMethod {
 		this.reactiveAdapterRegistry = registry;
 	}
 
+	/**
+	 * Configure a blocking predicate. This is useful when some controller method
+	 * should running out of http I/O thread(Scheduler).
+	 */
+	public void setBlockingPredicate(@NonNull BlockingPredicate blockingPredicate) {
+		this.blockingPredicate = blockingPredicate;
+	}
 
 	/**
 	 * Invoke the method for the given exchange.
@@ -134,11 +144,17 @@ public class InvocableHandlerMethod extends HandlerMethod {
 	public Mono<HandlerResult> invoke(
 			ServerWebExchange exchange, BindingContext bindingContext, Object... providedArgs) {
 
-		return getMethodArgumentValues(exchange, bindingContext, providedArgs).flatMap(args -> {
+		ReflectionUtils.makeAccessible(getBridgedMethod());
+		Method method = getBridgedMethod();
+
+		Mono<Object[]> argumentValues = getMethodArgumentValues(exchange, bindingContext, providedArgs);
+		if (this.blockingPredicate.test(method)) {
+			argumentValues.publishOn(this.blockingPredicate.getScheduler(method));
+		}
+
+		return argumentValues.flatMap(args -> {
 			Object value;
 			try {
-				ReflectionUtils.makeAccessible(getBridgedMethod());
-				Method method = getBridgedMethod();
 				if (KotlinDetector.isSuspendingFunction(method)) {
 					value = CoroutinesUtils.invokeSuspendingFunction(method, getBean(), args);
 				}
