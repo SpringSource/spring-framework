@@ -355,8 +355,16 @@ public class PathMatchingResourcePatternResolver implements ResourcePatternResol
 	 * @return the corresponding Resource object
 	 * @see java.lang.ClassLoader#getResources
 	 * @see org.springframework.core.io.Resource
+	 * @since 2017-09-12 rewrite to support jar file witch started with file protocol
 	 */
 	protected Resource convertClassLoaderURL(URL url) {
+		if (url.getProtocol().equals("file") && url.getFile().endsWith(".jar")) {
+			try {
+				return new UrlResource("jar", url + "!/");
+			} catch (final MalformedURLException ex) {
+				//MalformedURLException can be ignored
+			}
+		}
 		return new UrlResource(url);
 	}
 
@@ -715,7 +723,37 @@ public class PathMatchingResourcePatternResolver implements ResourcePatternResol
 			}
 			return Collections.emptySet();
 		}
-		return doFindMatchingFileSystemResources(rootDir, subPattern);
+		/*
+		@since 2017-09-11 kk580kk
+        rewrite for support directory "classes", because jdk in IBM Websphere and Oracle Weblogic
+        PathMatchingResourcePatternResolver.class.getClassLoader().getResources("") return "someDir/classes"
+        not the "someDir/lib" which the directory returns by tomcat
+        we need translate classes directory to lib directory
+        */
+		Set<Resource> matches = doFindMatchingFileSystemResources(rootDir, subPattern);
+		try {
+			rootDir = rootDirResource.getFile();
+							/*for mac and linux*/
+			if (rootDir.getAbsolutePath().endsWith("/classes")) {
+				rootDir = new File(rootDir.getAbsolutePath().substring(0, rootDir.getAbsolutePath().lastIndexOf("/classes")) + "/lib");
+			}
+							/*for windows*/
+			if (rootDir.getAbsolutePath().endsWith("\\classes")) {
+				rootDir = new File(rootDir.getAbsolutePath().substring(0, rootDir.getAbsolutePath().lastIndexOf("\\classes")) + "\\lib");
+			}
+			if (rootDir.isDirectory()) {
+				Set<Resource> containedJARs = doFindMatchingFileSystemResources(rootDir, "*.jar");
+				for (Resource jar : containedJARs) {
+					Set<Resource> matchingResourcesFoundInJar = doFindPathMatchingJarResources(convertClassLoaderURL(jar.getURL()), jar.getURL(), subPattern);
+					if (matchingResourcesFoundInJar != null && matchingResourcesFoundInJar.size() > 0) {
+						matches.addAll(matchingResourcesFoundInJar);
+					}
+				}
+			}
+		} catch (final IOException ex) {
+			ex.printStackTrace();
+		}
+		return matches;
 	}
 
 	/**
