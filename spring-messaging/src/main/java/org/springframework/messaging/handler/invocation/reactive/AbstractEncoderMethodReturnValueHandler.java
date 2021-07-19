@@ -20,6 +20,7 @@ import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -38,8 +39,8 @@ import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
-import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.MessagingException;
+import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.util.Assert;
 import org.springframework.util.MimeType;
 
@@ -70,15 +71,12 @@ public abstract class AbstractEncoderMethodReturnValueHandler implements Handler
 	private final List<Encoder<?>> encoders;
 
 	private final ReactiveAdapterRegistry adapterRegistry;
-
-
 	protected AbstractEncoderMethodReturnValueHandler(List<Encoder<?>> encoders, ReactiveAdapterRegistry registry) {
 		Assert.notEmpty(encoders, "At least one Encoder is required");
 		Assert.notNull(registry, "ReactiveAdapterRegistry is required");
 		this.encoders = Collections.unmodifiableList(encoders);
 		this.adapterRegistry = registry;
 	}
-
 
 	/**
 	 * The configured encoders.
@@ -112,18 +110,20 @@ public abstract class AbstractEncoderMethodReturnValueHandler implements Handler
 		DataBufferFactory bufferFactory = (DataBufferFactory) message.getHeaders()
 				.getOrDefault(HandlerMethodReturnValueHandler.DATA_BUFFER_FACTORY_HEADER,
 						DefaultDataBufferFactory.sharedInstance);
-
-		MimeType mimeType = (MimeType) message.getHeaders().get(MessageHeaders.CONTENT_TYPE);
+		MessageHeaderAccessor headerAccessor = new MessageHeaderAccessor(message);
+		MimeType mimeType = headerAccessor.getContentType();
+		List<MimeType> acceptMimes = headerAccessor.accept();
+		// Encode response message according content type and accept
 		Flux<DataBuffer> encodedContent = encodeContent(
-				returnValue, returnType, bufferFactory, mimeType, Collections.emptyMap());
+				returnValue, acceptMimes, message, returnType, bufferFactory, mimeType, Collections.emptyMap());
 
 		return new ChannelSendOperator<>(encodedContent, publisher ->
 				handleEncodedContent(Flux.from(publisher), returnType, message));
 	}
 
 	private Flux<DataBuffer> encodeContent(
-			@Nullable Object content, MethodParameter returnType, DataBufferFactory bufferFactory,
-			@Nullable MimeType mimeType, Map<String, Object> hints) {
+			@Nullable Object content, List<MimeType> accept,Message<?> message, MethodParameter returnType,
+			DataBufferFactory bufferFactory, @Nullable MimeType mimeType, Map<String, Object> hints) {
 
 		ResolvableType returnValueType = ResolvableType.forMethodParameter(returnType);
 		ReactiveAdapter adapter = getAdapterRegistry().getAdapter(returnValueType.resolve(), content);
@@ -147,10 +147,14 @@ public abstract class AbstractEncoderMethodReturnValueHandler implements Handler
 		if (elementType.resolve() == void.class || elementType.resolve() == Void.class) {
 			return Flux.from(publisher).cast(DataBuffer.class);
 		}
-
-		Encoder<?> encoder = getEncoder(elementType, mimeType);
+		MimeType contentMime = getAvailableMimeType(elementType,mimeType,accept);
+		AtomicReference<MimeType> responseContentTypeAtomic = getResponseContentType(message);
+		if (responseContentTypeAtomic != null) {
+			responseContentTypeAtomic.set(contentMime);
+		}
+		Encoder<?> encoder = getEncoder(elementType, contentMime);
 		return Flux.from(publisher).map(value ->
-				encodeValue(value, elementType, encoder, bufferFactory, mimeType, hints));
+				encodeValue(value, elementType, encoder, bufferFactory, contentMime, hints));
 	}
 
 	private ResolvableType getElementType(ReactiveAdapter adapter, ResolvableType type) {
@@ -176,6 +180,22 @@ public abstract class AbstractEncoderMethodReturnValueHandler implements Handler
 		return null;
 	}
 
+	@Nullable
+	@SuppressWarnings("unchecked")
+	private MimeType getAvailableMimeType(ResolvableType elementType, @Nullable MimeType contentTypeMime,
+											@Nullable List<MimeType> accept) {
+		if(accept == null && accept.size() ==0){
+			return contentTypeMime;
+		}
+		for(MimeType acc : accept){
+			Encoder<?> encoder = getEncoder(elementType, acc);
+			if(encoder !=null){
+				return acc;
+			}
+		}
+		return contentTypeMime;
+	}
+
 	@SuppressWarnings("unchecked")
 	private <T> DataBuffer encodeValue(
 			Object element, ResolvableType elementType, @Nullable Encoder<T> encoder,
@@ -190,6 +210,13 @@ public abstract class AbstractEncoderMethodReturnValueHandler implements Handler
 			}
 		}
 		return encoder.encodeValue((T) element, bufferFactory, elementType, mimeType, hints);
+	}
+
+	@SuppressWarnings("unchecked")
+	protected AtomicReference<MimeType> getResponseContentType(Message<?> message) {
+		Object headerValue = message.getHeaders().get(RESPONSE_CONTENT_TYPE);
+		Assert.state(headerValue == null || headerValue instanceof AtomicReference, "Expected Mono");
+		return (AtomicReference<MimeType>) headerValue;
 	}
 
 	/**

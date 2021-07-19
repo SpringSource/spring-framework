@@ -15,13 +15,18 @@
  */
 package org.springframework.messaging.rsocket;
 
+
+
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.google.common.collect.Lists;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.CompositeByteBuf;
@@ -40,13 +45,16 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.MimeType;
 import org.springframework.util.ObjectUtils;
 
+import static io.rsocket.metadata.WellKnownMimeType.MESSAGE_RSOCKET_ACCEPT_MIMETYPES;
+import static io.rsocket.metadata.WellKnownMimeType.MESSAGE_RSOCKET_MIMETYPE;
+
 /**
  * Helps to collect metadata values and mime types, and encode them.
  *
  * @author Rossen Stoyanchev
  * @since 5.2
  */
-final class MetadataEncoder {
+public final class MetadataEncoder {
 
 	/** For route variable replacement. */
 	private static final Pattern VARS_PATTERN = Pattern.compile("\\{(.+?)}");
@@ -64,13 +72,12 @@ final class MetadataEncoder {
 
 	@Nullable
 	private String route;
-
 	private final List<MetadataEntry> metadataEntries = new ArrayList<>(4);
 
 	private boolean hasAsyncValues;
 
 
-	MetadataEncoder(MimeType metadataMimeType, RSocketStrategies strategies) {
+	public MetadataEncoder(MimeType metadataMimeType, RSocketStrategies strategies) {
 		Assert.notNull(metadataMimeType, "'metadataMimeType' is required");
 		Assert.notNull(strategies, "RSocketStrategies is required");
 		this.metadataMimeType = metadataMimeType;
@@ -96,7 +103,6 @@ final class MetadataEncoder {
 		assertMetadataEntryCount();
 		return this;
 	}
-
 	private static String expand(String route, Object... routeVars) {
 		if (ObjectUtils.isEmpty(routeVars)) {
 			return route;
@@ -233,6 +239,23 @@ final class MetadataEncoder {
 		if (value instanceof ByteBuf) {
 			return asDataBuffer((ByteBuf) value);
 		}
+		WellKnownMimeType wellKnownMimeType =  WellKnownMimeType.fromString(mimeType.toString());
+		if(wellKnownMimeType == MESSAGE_RSOCKET_MIMETYPE || wellKnownMimeType == MESSAGE_RSOCKET_ACCEPT_MIMETYPES ){
+			List<String> mimeTypes = Lists.newArrayList();
+			if (value instanceof String) {
+				mimeTypes.add((String)value);
+			}
+			else if(value instanceof Collection) {
+				for(Object v: (Collection)value) {
+					Assert.isTrue(v instanceof String, () -> "Expect a string type value, mimeType: '" + mimeType + "'");
+					mimeTypes.add((String)v);
+				}
+			}
+			else {
+				throw new IllegalArgumentException("Expect a string or collection of string,mimeType:'" + mimeType + "'");
+			}
+			return asDataBuffer(MimeTypeMetadataCodec.encode(this.allocator, mimeTypes));
+		}
 		ResolvableType type = ResolvableType.forInstance(value);
 		Encoder<T> encoder = this.strategies.encoder(type, mimeType);
 		Assert.notNull(encoder, () -> "No encoder for metadata " + value + ", mimeType '" + mimeType + "'");
@@ -248,6 +271,14 @@ final class MetadataEncoder {
 			byteBuf.release();
 			return buffer;
 		}
+	}
+
+	/**
+	 * Get target metadata entry.
+	 **/
+	public MetadataEntry getMetadata(MimeType type){
+		Optional<MetadataEntry> entry = this.metadataEntries.stream().filter(e->e.mimeType.equals(type)).findFirst();
+		return entry.orElseGet(()->null);
 	}
 
 	private Mono<List<MetadataEntry>> resolveAsyncMetadata() {
@@ -273,7 +304,7 @@ final class MetadataEncoder {
 	 * Holder for the metadata value and mime type.
 	 * @since 5.2.2
 	 */
-	private static class MetadataEntry {
+	public static class MetadataEntry {
 
 		private final Object value;
 
@@ -292,5 +323,4 @@ final class MetadataEncoder {
 			return this.mimeType;
 		}
 	}
-
 }

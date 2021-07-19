@@ -16,6 +16,7 @@
 
 package org.springframework.messaging.rsocket.annotation.support;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -203,16 +204,32 @@ class MessagingRSocket implements RSocket {
 			}
 		}
 
-		headers.setContentType(this.dataMimeType);
+		headers.setContentType(getMessageContentType(headers));
 		headers.setHeader(RSocketFrameTypeMessageCondition.FRAME_TYPE_HEADER, frameType);
 		headers.setHeader(RSocketRequesterMethodArgumentResolver.RSOCKET_REQUESTER_HEADER, this.requester);
 		if (responseRef != null) {
 			headers.setHeader(RSocketPayloadReturnValueHandler.RESPONSE_HEADER, responseRef);
+			AtomicReference<MimeType> responseContentTypeRef = new AtomicReference<>();
+			headers.setHeader(RSocketPayloadReturnValueHandler.RESPONSE_CONTENT_TYPE, responseContentTypeRef);
 		}
 		headers.setHeader(HandlerMethodReturnValueHandler.DATA_BUFFER_FACTORY_HEADER,
 				this.strategies.dataBufferFactory());
 
 		return headers.getMessageHeaders();
+	}
+
+
+	/**
+	 * Compute message content mime type.
+	 **/
+	@SuppressWarnings({ "unchecked" })
+	public MimeType getMessageContentType(MessageHeaderAccessor headers){
+		Object messageContentType  = headers.getHeader(MessageHeaders.CONTENT_TYPE);
+		if (messageContentType instanceof List) {
+			List<Object> types = (List<Object>)messageContentType;
+			return types.size() == 0 ? this.dataMimeType : (MimeType) types.get(0);
+		}
+		return this.dataMimeType;
 	}
 
 }

@@ -16,13 +16,17 @@
 
 package org.springframework.messaging.rsocket;
 
+import java.util.AbstractMap;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import io.netty.buffer.ByteBuf;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
 import io.rsocket.core.RSocketClient;
+import io.rsocket.metadata.WellKnownMimeType;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -36,6 +40,7 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.lang.Nullable;
+import org.springframework.messaging.MessageHeaders;
 import org.springframework.util.Assert;
 import org.springframework.util.MimeType;
 
@@ -135,7 +140,6 @@ final class DefaultRSocketRequester implements RSocketRequester {
 		public DefaultRequestSpec(String route, Object... vars) {
 			this.metadataEncoder.route(route, vars);
 		}
-
 		public DefaultRequestSpec(Object metadata, @Nullable MimeType mimeType) {
 			this.metadataEncoder.metadata(metadata, mimeType);
 		}
@@ -152,7 +156,6 @@ final class DefaultRSocketRequester implements RSocketRequester {
 			configurer.accept(this);
 			return this;
 		}
-
 		@Override
 		public RequestSpec data(Object data) {
 			Assert.notNull(data, "'data' must not be null");
@@ -208,7 +211,7 @@ final class DefaultRSocketRequester implements RSocketRequester {
 			}
 
 			Encoder<?> encoder = elementType != ResolvableType.NONE && !Object.class.equals(elementType.resolve()) ?
-					strategies.encoder(elementType, dataMimeType) : null;
+					strategies.encoder(elementType, messageDataMimeType()) : null;
 
 			if (adapter != null && !adapter.isMultiValue()) {
 				Mono<DataBuffer> data = Mono.from(publisher)
@@ -240,10 +243,41 @@ final class DefaultRSocketRequester implements RSocketRequester {
 		private <T> DataBuffer encodeData(T value, ResolvableType elementType, @Nullable Encoder<?> encoder) {
 			if (encoder == null) {
 				elementType = ResolvableType.forInstance(value);
-				encoder = strategies.encoder(elementType, dataMimeType);
+				encoder = strategies.encoder(elementType, messageDataMimeType());
 			}
 			return ((Encoder<T>) encoder).encodeValue(
-					value, bufferFactory(), elementType, dataMimeType, EMPTY_HINTS);
+					value, bufferFactory(), elementType, messageDataMimeType(), EMPTY_HINTS);
+		}
+
+		/**
+		 * Get message mime type if it statements on metadata or {@link #dataMimeType} as default.
+		 **/
+		public MimeType messageDataMimeType() {
+			MetadataEncoder.MetadataEntry entry = this.metadataEncoder.getMetadata(
+					MimeType.valueOf(WellKnownMimeType.MESSAGE_RSOCKET_MIMETYPE.getString()));
+			if (entry == null|| entry.value() == null) {
+				return dataMimeType;
+			}
+			if (entry.value() instanceof String) {
+				return MimeType.valueOf((String)entry.value());
+			}
+			else if(entry.value() instanceof ByteBuf) {
+				ByteBuf buf = (ByteBuf) entry.value();
+				buf.markReaderIndex();
+				try {
+					List<String> mimeTypes = MimeTypeMetadataCodec.decode(buf);
+					if (mimeTypes.size() > 0) {
+						return MimeType.valueOf(mimeTypes.get(0));
+					}
+				}
+				finally {
+					buf.resetReaderIndex();
+				}
+			}
+			else {
+				throw new IllegalArgumentException("Message rsocket mime type should be type of String or ByteBuf");
+			}
+			return dataMimeType;
 		}
 
 		/**
@@ -284,10 +318,15 @@ final class DefaultRSocketRequester implements RSocketRequester {
 			if (isVoid(elementType)) {
 				return (Mono<T>) payloadMono.then();
 			}
+			return (Mono<T>) payloadMono.map(this::retainDataAndReleasePayloadWithContentType)
+					.map(tuple2 -> strategies.decoder(elementType,
+							tuple2.getKey()).decode(tuple2.getValue(), elementType, tuple2.getKey(), EMPTY_HINTS));
 
-			Decoder<?> decoder = strategies.decoder(elementType, dataMimeType);
-			return (Mono<T>) payloadMono.map(this::retainDataAndReleasePayload)
-					.map(dataBuffer -> decoder.decode(dataBuffer, elementType, dataMimeType, EMPTY_HINTS));
+		}
+
+		@SuppressWarnings({"rawtypes","unchecked"})
+		public Map.Entry<MimeType,DataBuffer> retainDataAndReleasePayloadWithContentType(Payload payload){
+			return new AbstractMap.SimpleEntry(messageContentType(payload),retainDataAndReleasePayload(payload));
 		}
 
 		@Override
@@ -310,10 +349,25 @@ final class DefaultRSocketRequester implements RSocketRequester {
 			if (isVoid(elementType)) {
 				return payloadFlux.thenMany(Flux.empty());
 			}
-
+			return payloadFlux.switchOnFirst((signal, innerFlux) -> {
+				Payload firstPayload = signal.get();
+				return firstPayload == null ? decodeFLux(innerFlux, elementType):
+						decodeFlux(firstPayload, innerFlux, elementType);
+			});
+		}
+		@SuppressWarnings("unchecked")
+		public <T> Flux<T> decodeFLux(Flux<Payload> payloads,ResolvableType elementType){
 			Decoder<?> decoder = strategies.decoder(elementType, dataMimeType);
-			return payloadFlux.map(this::retainDataAndReleasePayload).map(dataBuffer ->
+			return payloads.map(this::retainDataAndReleasePayload).map(dataBuffer ->
 					(T) decoder.decode(dataBuffer, elementType, dataMimeType, EMPTY_HINTS));
+		}
+
+		@SuppressWarnings("unchecked")
+		public <T> Flux<T> decodeFlux(Payload firstPayload, Flux<Payload> payloads,ResolvableType elementType){
+			MimeType contentMime =  messageContentType(firstPayload);
+			Decoder<?> decoder = strategies.decoder(elementType, contentMime);
+			return payloads.map(this::retainDataAndReleasePayload).map(dataBuffer ->
+					(T) decoder.decode(dataBuffer, elementType, contentMime, EMPTY_HINTS));
 		}
 
 		private Mono<Payload> getPayloadMono() {
@@ -324,6 +378,22 @@ final class DefaultRSocketRequester implements RSocketRequester {
 		private DataBuffer retainDataAndReleasePayload(Payload payload) {
 			return PayloadUtils.retainDataAndReleasePayload(payload, bufferFactory());
 		}
+
+		@SuppressWarnings("unchecked")
+		@Nullable
+		public MimeType messageContentType(Payload firstPayload){
+			if (firstPayload!= null) {
+				Map<String, Object> metadataValues = strategies.metadataExtractor().extract(firstPayload, metadataMimeType);
+				Object contentType = metadataValues.get(MessageHeaders.CONTENT_TYPE);
+				if (contentType instanceof List) {
+					List<MimeType> mimeTypes = (List<MimeType>) contentType;
+					return mimeTypes.get(0);
+				}
+			}
+			return dataMimeType;
+		}
 	}
+
+
 
 }

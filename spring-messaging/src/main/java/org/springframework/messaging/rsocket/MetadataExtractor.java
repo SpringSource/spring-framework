@@ -40,7 +40,6 @@ public interface MetadataExtractor {
 	 */
 	String ROUTE_KEY = "route";
 
-
 	/**
 	 * Extract a map of values from the given {@link Payload} metadata.
 	 * The Payload "route", if present, should be saved under {@link #ROUTE_KEY}.
