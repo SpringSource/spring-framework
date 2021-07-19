@@ -644,7 +644,7 @@ class ObjectUtilsTests {
 	@Test
 	void nullSafeToStringWithCharArray() {
 		char[] array = {'A', 'B'};
-		assertThat(ObjectUtils.nullSafeToString(array)).isEqualTo("{'A', 'B'}");
+		assertThat(ObjectUtils.nullSafeToString(array)).isEqualTo("{A, B}");
 	}
 
 	@Test
@@ -733,7 +733,7 @@ class ObjectUtilsTests {
 
 	@Test
 	void nullSafeToStringWithObjectArray() {
-		Object[] array = {"Han", Long.valueOf(43)};
+		Object[] array = {"Han", 43L};
 		assertThat(ObjectUtils.nullSafeToString(array)).isEqualTo("{Han, 43}");
 	}
 
@@ -821,6 +821,18 @@ class ObjectUtilsTests {
 			.withMessage("Constant [bogus] does not exist in enum type org.springframework.util.ObjectUtilsTests$Tropes");
 	}
 
+	@Test
+	void nullSafeToStringWithToStringMethodNull(){
+		User user = new User();
+		assertThat(ObjectUtils.nullSafeToString(user)).isEqualTo("user");
+	}
+
+	@Test
+	void nullSafeToStringWithToStringMethodNonNull(){
+		UserNullToString user = new UserNullToString();
+		assertThat(ObjectUtils.nullSafeToString(user)).isEqualTo("");
+	}
+
 	private void assertEqualHashCodes(int expected, Object array) {
 		int actual = ObjectUtils.nullSafeHashCode(array);
 		assertThat(actual).isEqualTo(expected);
@@ -829,5 +841,21 @@ class ObjectUtilsTests {
 
 
 	enum Tropes {FOO, BAR, baz}
+
+	static class UserNullToString {
+
+		@Override
+		public String toString(){
+			return null;
+		}
+	}
+
+	static class User {
+
+		@Override
+		public String toString(){
+			return "user";
+		}
+	}
 
 }
