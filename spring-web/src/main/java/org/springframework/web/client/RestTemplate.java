@@ -85,6 +85,7 @@ import org.springframework.web.util.UriTemplateHandler;
  * @author Juergen Hoeller
  * @author Sam Brannen
  * @author Sebastien Deleuze
+ * @author Yanming Zhou
  * @since 3.0
  * @see HttpMessageConverter
  * @see RequestCallback
@@ -684,7 +685,8 @@ public class RestTemplate extends InterceptingHttpAccessor implements RestOperat
 			}
 		}
 		else {
-			return entity.getUrl();
+			URI url = entity.getUrl();
+			return url.isAbsolute() ? url : this.uriTemplateHandler.expand(url.toString());
 		}
 	}
 
@@ -747,7 +749,9 @@ public class RestTemplate extends InterceptingHttpAccessor implements RestOperat
 	@Nullable
 	public <T> T execute(URI url, HttpMethod method, @Nullable RequestCallback requestCallback,
 			@Nullable ResponseExtractor<T> responseExtractor) throws RestClientException {
-
+		if (!url.isAbsolute()) {
+			url = getUriTemplateHandler().expand(url.toString());
+		}
 		return doExecute(url, method, requestCallback, responseExtractor);
 	}
 
