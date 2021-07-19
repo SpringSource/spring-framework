@@ -250,7 +250,7 @@ public abstract class AbstractAutoProxyCreator extends ProxyProcessorSupport
 			if (this.advisedBeans.containsKey(cacheKey)) {
 				return null;
 			}
-			if (isInfrastructureClass(beanClass) || shouldSkip(beanClass, beanName)) {
+			if (isInfrastructureClass(beanClass) || shouldSkip(beanClass, beanName) || beanClass.isArray()) {
 				this.advisedBeans.put(cacheKey, Boolean.FALSE);
 				return null;
 			}
@@ -330,7 +330,7 @@ public abstract class AbstractAutoProxyCreator extends ProxyProcessorSupport
 		if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) {
 			return bean;
 		}
-		if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) {
+		if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName) || bean.getClass().isArray()) {
 			this.advisedBeans.put(cacheKey, Boolean.FALSE);
 			return bean;
 		}
