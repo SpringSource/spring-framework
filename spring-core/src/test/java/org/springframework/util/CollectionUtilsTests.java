@@ -17,6 +17,8 @@
 package org.springframework.util;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,8 +28,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -207,6 +212,35 @@ class CollectionUtilsTests {
 
 		list = new ArrayList<>();
 		assertThat(CollectionUtils.hasUniqueObject(list)).isFalse();
+	}
+
+	@ParameterizedTest
+	@MethodSource("emptyMaps")
+	void conversionOfEmptyMap(Map<String, List<String>> emptyMap) {
+		MultiValueMap<String,  String> asMultiValueMap = CollectionUtils.toMultiValueMap(emptyMap);
+		assertThat(asMultiValueMap.isEmpty()).isTrue();
+		assertThat(asMultiValueMap).isEmpty();
+	}
+
+	static Stream<Map<String, List<String>>> emptyMaps() {
+		return Stream.of(Collections.emptyMap(), new HashMap<>());
+	}
+
+	@Test
+	void conversionOfNonEmptyMap() {
+		Map<String, List<String>> wrapped = Collections.singletonMap("key", Arrays.asList("first", "second"));
+		MultiValueMap<String, String> asMultiValueMap = CollectionUtils.toMultiValueMap(wrapped);
+		assertThat(asMultiValueMap).containsAllEntriesOf(wrapped);
+	}
+
+	@Test
+	void changesValueByReference() {
+		Map<String, List<String>> wrapped = new HashMap<>();
+		MultiValueMap<String, String> asMultiValueMap = CollectionUtils.toMultiValueMap(wrapped);
+		assertThat(asMultiValueMap).doesNotContainKeys("key");
+
+		wrapped.put("key", new ArrayList<>());
+		assertThat(asMultiValueMap).containsKey("key");
 	}
 
 
