@@ -34,11 +34,8 @@ import org.springframework.aop.scope.ScopedObject;
 import org.springframework.aop.scope.ScopedProxyUtils;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.aop.support.DefaultPointcutAdvisor;
-import org.springframework.beans.factory.BeanCreationException;
-import org.springframework.beans.factory.BeanDefinitionStoreException;
-import org.springframework.beans.factory.FactoryBean;
-import org.springframework.beans.factory.NoSuchBeanDefinitionException;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor;
 import org.springframework.beans.factory.annotation.Lookup;
@@ -1112,6 +1109,16 @@ class ConfigurationClassPostProcessorTests {
 		assertThat(condition).isTrue();
 	}
 
+	@Test
+	public void testBeanDefinitionRegistryPostProcessorImplementation() {
+		AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(PostProcessorConfiguration.class);
+		ConfigurableListableBeanFactory testBeanFactory = ctx.getBeanFactory();
+		PostProcessorConfigurationUser user = (PostProcessorConfigurationUser) ctx.getBean("postProcessorConfigurationUser");
+		assertEquals(user.getClass().getName(),
+				testBeanFactory.getBeanDefinition("postProcessorConfigurationUser").getBeanClassName());
+		assertEquals(user.postProcessorConfiguration.getClass().getName(),
+				testBeanFactory.getBeanDefinition("configurationClassPostProcessorTests.PostProcessorConfiguration").getBeanClassName());
+	}
 
 	// -------------------------------------------------------------------------
 
@@ -2017,6 +2024,23 @@ class ConfigurationClassPostProcessorTests {
 				}
 			};
 		}
+	}
+
+	@Configuration
+	static class PostProcessorConfiguration implements BeanDefinitionRegistryPostProcessor {
+		@Override
+		public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+			registry.registerBeanDefinition("postProcessorConfigurationUser", new RootBeanDefinition(PostProcessorConfigurationUser.class));
+		}
+		@Override
+		public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+		}
+	}
+
+	static class PostProcessorConfigurationUser {
+		@Autowired
+		PostProcessorConfiguration postProcessorConfiguration;
+
 	}
 
 }
