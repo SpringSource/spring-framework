@@ -226,20 +226,18 @@ public final class SpelCompiler implements Opcodes {
 	 * @return a corresponding SpelCompiler instance
 	 */
 	public static SpelCompiler getCompiler(@Nullable ClassLoader classLoader) {
-		ClassLoader clToUse = (classLoader != null ? classLoader : ClassUtils.getDefaultClassLoader());
-		// Quick check for existing compiler without lock contention
-		SpelCompiler compiler = compilers.get(clToUse);
-		if (compiler == null) {
-			// Full lock now since we're creating a child ClassLoader
-			synchronized (compilers) {
-				compiler = compilers.get(clToUse);
-				if (compiler == null) {
-					compiler = new SpelCompiler(clToUse);
-					compilers.put(clToUse, compiler);
-				}
-			}
+		if (classLoader == null) {
+			classLoader = ClassUtils.getDefaultClassLoader();
 		}
-		return compiler;
+		// Quick check for existing compiler without lock contention
+		SpelCompiler compiler = compilers.get(classLoader);
+		if (compiler != null) {
+			return compiler;
+		}
+		// Full lock now since we're creating a child ClassLoader
+		synchronized (compilers) {
+			return compilers.computeIfAbsent(classLoader, clToUse -> new SpelCompiler(clToUse));
+		}
 	}
 
 	/**
