@@ -92,6 +92,8 @@ public class CachingConnectionFactory extends SingleConnectionFactory {
 	private boolean cacheProducers = true;
 
 	private boolean cacheConsumers = true;
+	
+	private boolean cacheSharedConsumers = true;
 
 	private volatile boolean active = true;
 
@@ -159,6 +161,27 @@ public class CachingConnectionFactory extends SingleConnectionFactory {
 		return this.cacheProducers;
 	}
 
+	/**
+	 * Specify whether to cache shared JMS MessageConsumers per JMS Session instance
+	 * (more specifically: one MessageConsumer per Destination, selector String
+	 * and Session). Note that durable subscribers will only be cached until
+	 * logical closing of the Session handle.
+	 * <p>Default is "true". Switch this to "false" in order to always
+	 * recreate MessageConsumers on demand.
+	 * <p>Note that this feature requires JMS 2.0
+	 */
+	public void setCacheSharedConsumers(boolean cacheSharedConsumers) {
+		this.cacheSharedConsumers = cacheSharedConsumers;
+	}
+
+	/**
+	 * Return whether to cache shared JMS MessageConsumers per JMS Session instance.
+	 * <p>Note that this feature requires JMS 2.0
+	 */
+	public boolean isCacheSharedConsumers() {
+		return this.cacheSharedConsumers;
+	}
+	
 	/**
 	 * Specify whether to cache JMS MessageConsumers per JMS Session instance
 	 * (more specifically: one MessageConsumer per Destination, selector String
@@ -352,6 +375,29 @@ public class CachingConnectionFactory extends SingleConnectionFactory {
 						return getCachedProducer(dest);
 					}
 				}
+				else if (isCacheSharedConsumers() && (methodName.equals("createSharedConsumer") ||
+						methodName.equals("createSharedDurableConsumer"))) {
+					if (methodName.equals("createSharedConsumer")) {
+						Destination dest = (Destination) args[0];
+						if (dest != null) {
+							return getCachedConsumer(dest,
+									(args.length > 2 ? (String) args[2] : null),
+									null,
+									(String) args[1],
+									false);
+						}
+					}
+					else if (methodName.equals("createSharedDurableConsumer")) {
+						Destination dest = (Destination) args[0];
+						if (dest != null) {
+							return getCachedConsumer(dest,
+									(args.length > 2 ? (String) args[2] : null),
+									null,
+									(String) args[1],
+									true);
+						}
+					}
+				}
 				else if (isCacheConsumers()) {
 					// let raw JMS invocation throw an exception if Destination (i.e. args[0]) is null
 					if ((methodName.equals("createConsumer") || methodName.equals("createReceiver") ||
@@ -371,26 +417,6 @@ public class CachingConnectionFactory extends SingleConnectionFactory {
 							return getCachedConsumer(dest,
 									(args.length > 2 ? (String) args[2] : null),
 									(args.length > 3 && (Boolean) args[3]),
-									(String) args[1],
-									true);
-						}
-					}
-					else if (methodName.equals("createSharedConsumer")) {
-						Destination dest = (Destination) args[0];
-						if (dest != null) {
-							return getCachedConsumer(dest,
-									(args.length > 2 ? (String) args[2] : null),
-									null,
-									(String) args[1],
-									false);
-						}
-					}
-					else if (methodName.equals("createSharedDurableConsumer")) {
-						Destination dest = (Destination) args[0];
-						if (dest != null) {
-							return getCachedConsumer(dest,
-									(args.length > 2 ? (String) args[2] : null),
-									null,
 									(String) args[1],
 									true);
 						}
