@@ -323,7 +323,7 @@ public class CronSequenceGenerator {
 		if (field.contains("?")) {
 			field = "*";
 		}
-		setNumberHits(bits, field, 0, max);
+		setNumberHits(bits, field, 1, max);
 	}
 
 	private void setMonths(BitSet bits, String value) {
