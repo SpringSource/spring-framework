@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,7 +96,8 @@ public interface InstantiationAwareBeanPostProcessor extends BeanPostProcessor {
 
 	/**
 	 * Post-process the given property values before the factory applies them
-	 * to the given bean, without any need for property descriptors.
+	 * to the given bean({@link org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory#applyPropertyValues}),
+	 * without any need for property descriptors.
 	 * <p>Implementations should return {@code null} (the default) if they provide a custom
 	 * {@link #postProcessPropertyValues} implementation, and {@code pvs} otherwise.
 	 * In a future version of this interface (with {@link #postProcessPropertyValues} removed),
@@ -111,6 +112,8 @@ public interface InstantiationAwareBeanPostProcessor extends BeanPostProcessor {
 	 * @throws org.springframework.beans.BeansException in case of errors
 	 * @since 5.1
 	 * @see #postProcessPropertyValues
+	 * @see org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory#populateBean
+	 * @see org.springframework.beans.factory.support.AbstractAutowireCapableBeanFactory#applyPropertyValues
 	 */
 	@Nullable
 	default PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName)
