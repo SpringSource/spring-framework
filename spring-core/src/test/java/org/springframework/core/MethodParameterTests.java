@@ -237,6 +237,16 @@ class MethodParameterTests {
 		assertThat(m3.getTypeIndexForCurrentLevel()).isEqualTo(3);
 	}
 
+	@Test
+	void cloneShouldKeepNestedMethodParameter() throws Exception {
+		Method method = ArrayList.class.getMethod("get", int.class);
+		MethodParameter m1 = MethodParameter.forExecutable(method, -1);
+		MethodParameter m2 = m1.nested();
+		MethodParameter m3 = m1.clone();
+		MethodParameter m4 = m3.nested();
+		assertThat(m2).isSameAs(m4);
+	}
+
 	public int method(String p1, long p2) {
 		return 42;
 	}
