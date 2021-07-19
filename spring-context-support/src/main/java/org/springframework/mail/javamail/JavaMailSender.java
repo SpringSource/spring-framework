@@ -17,11 +17,17 @@
 package org.springframework.mail.javamail;
 
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
+import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 
 import org.springframework.mail.MailException;
+import org.springframework.mail.MailParseException;
+import org.springframework.mail.MailPreparationException;
 import org.springframework.mail.MailSender;
+import org.springframework.mail.SimpleMailMessage;
 
 /**
  * Extended {@link org.springframework.mail.MailSender} interface for JavaMail,
@@ -82,6 +88,26 @@ public interface JavaMailSender extends MailSender {
 	*/
 	MimeMessage createMimeMessage(InputStream contentStream) throws MailException;
 
+
+	//---------------------------------------------------------------------
+	// Implementation of MailSender
+	//---------------------------------------------------------------------
+
+	@Override
+	default void send(SimpleMailMessage... simpleMessages) throws MailException {
+		List<MimeMessage> mimeMessages = new ArrayList<>(simpleMessages.length);
+		for (SimpleMailMessage simpleMessage : simpleMessages) {
+			MimeMailMessage message = new MimeMailMessage(createMimeMessage());
+			simpleMessage.copyTo(message);
+			MimeMessage mimeMessage = message.getMimeMessage();
+			if (mimeMessage instanceof SmartMimeMessage) {
+				((SmartMimeMessage) mimeMessage).setOriginalSimpleMailMessage(simpleMessage);
+			}
+			mimeMessages.add(mimeMessage);
+		}
+		send(mimeMessages.toArray(new MimeMessage[0]));
+	}
+
 	/**
 	 * Send the given JavaMail MIME message.
 	 * The message needs to have been created with {@link #createMimeMessage()}.
@@ -92,7 +118,9 @@ public interface JavaMailSender extends MailSender {
 	 * in case of failure when sending the message
 	 * @see #createMimeMessage
 	 */
-	void send(MimeMessage mimeMessage) throws MailException;
+	default void send(MimeMessage mimeMessage) throws MailException {
+		send(new MimeMessage[] {mimeMessage});
+	}
 
 	/**
 	 * Send the given array of JavaMail MIME messages in batch.
@@ -121,7 +149,9 @@ public interface JavaMailSender extends MailSender {
 	 * @throws org.springframework.mail.MailSendException
 	 * in case of failure when sending the message
 	 */
-	void send(MimeMessagePreparator mimeMessagePreparator) throws MailException;
+	default void send(MimeMessagePreparator mimeMessagePreparator) throws MailException {
+		send(new MimeMessagePreparator[] {mimeMessagePreparator});
+	}
 
 	/**
 	 * Send the JavaMail MIME messages prepared by the given MimeMessagePreparators.
@@ -138,6 +168,25 @@ public interface JavaMailSender extends MailSender {
 	 * @throws org.springframework.mail.MailSendException
 	 * in case of failure when sending a message
 	 */
-	void send(MimeMessagePreparator... mimeMessagePreparators) throws MailException;
+	default void send(MimeMessagePreparator... mimeMessagePreparators) throws MailException {
+		try {
+			List<MimeMessage> mimeMessages = new ArrayList<>(mimeMessagePreparators.length);
+			for (MimeMessagePreparator preparator : mimeMessagePreparators) {
+				MimeMessage mimeMessage = createMimeMessage();
+				preparator.prepare(mimeMessage);
+				mimeMessages.add(mimeMessage);
+			}
+			send(mimeMessages.toArray(new MimeMessage[0]));
+		}
+		catch (MailException ex) {
+			throw ex;
+		}
+		catch (MessagingException ex) {
+			throw new MailParseException(ex);
+		}
+		catch (Exception ex) {
+			throw new MailPreparationException(ex);
+		}
+	}
 
 }
